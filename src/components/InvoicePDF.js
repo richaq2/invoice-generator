@@ -3,8 +3,10 @@ import { styles } from './pdfStyles';
 import { formatNumberAsCurrency } from './utils'
 
 const InvoicePDF = ({ values,logo,signature }) => {
-  console.log("InvoicePDF ",logo)
-  console.log("InvoicePDF ",signature)
+  if (!values) {
+    return null; // Handle case where values is undefined
+  }
+
   return (
 <Document>
     <Page style={styles.page}>
@@ -15,8 +17,8 @@ const InvoicePDF = ({ values,logo,signature }) => {
       <View style={styles.details}>
         <View style={styles.tableRow}>
           <View style={styles.tableColInvoice}>
-            <Text>Invoice No: {values.invoiceNo}</Text>
-            <Text>Invoice Date: {values.invoiceDate}</Text>
+            <Text>Invoice No: {values.invoiceNo ? values.invoiceNo : 'N/A'}</Text>
+            <Text>Invoice Date: {values.invoiceDate ? values.invoiceDate : 'N/A'}</Text>
           </View>
           <View style={styles.tableColInvoice}>
             <Text>Reverse Charge: {values.reverseCharge ? 'Yes' : 'No'}</Text>
@@ -110,3 +112,5 @@ const InvoicePDF = ({ values,logo,signature }) => {
 };
 
 export default InvoicePDF;
+
+

@@ -1,4 +1,4 @@
-import React,{useState} from "react";
+import React, { useState } from "react";
 import { useFormik, FieldArray, FormikProvider } from "formik";
 import {
   Input,
@@ -19,36 +19,7 @@ import {
 import Textarea from "@mui/joy/Textarea";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import InvoicePDF from "./InvoicePDF";
-import * as yup from "yup";
-import {calculateItemFields} from './utils'
-
-// Validation Schema
-const validationSchema = yup.object({
-  sellerName: yup.string().required("Required"),
-  sellerAddress: yup.string().required("Required"),
-  sellerCity: yup.string().required("Required"),
-  sellerState: yup.string().required("Required"),
-  sellerPincode: yup.string().required("Required"),
-  sellerPAN: yup.string().required("Required"),
-  sellerGST: yup.string().required("Required"),
-  placeOfSupply: yup.string().required("Required"),
-  invoiceNo: yup.string().required("Required"),
-  invoiceDetails: yup.string().required("Required"),
-  invoiceDate: yup.date().required("Required"),
-  reverseCharge: yup.boolean(),
-  logo: yup.mixed(),
-  items: yup.array().of(
-    yup.object({
-      description: yup.string().required("Required"),
-      unitPrice: yup.number().required("Required").positive(),
-      quantity: yup.number().required("Required").positive(),
-      netAmount: yup.number().required("Required").positive(),
-      taxRate: yup.number().required("Required").positive(),
-      taxAmount: yup.number().required("Required").positive(),
-      totalAmount: yup.number().required("Required").positive(),
-    })
-  ),
-});
+import YupValidation from "./YupValidation";
 
 const InvoiceForm = () => {
   const [logoPreview, setLogoPreview] = useState(null);
@@ -65,16 +36,15 @@ const InvoiceForm = () => {
     reader.readAsDataURL(file);
   };
 
-  const displayDate =() =>{
+  const displayDate = () => {
     const date = new Date();
     const today = date.toLocaleDateString("en-GB", {
       month: "numeric",
       day: "numeric",
       year: "numeric",
     });
-    return today
-  }
- 
+    return today;
+  };
 
   const generateInvoiceNumber = () => {
     const date = new Date();
@@ -89,27 +59,32 @@ const InvoiceForm = () => {
     const randomPart = Math.floor(100 + Math.random() * 900); // Random number from 100 to 999
     return `${datePart}${timePart}${randomPart}`;
   };
+
   const formik = useFormik({
     initialValues: {
       sellerName: "",
       sellerAddress: "",
-      sellerCity: "",
       sellerState: "",
       sellerPincode: "",
+      buyerName: "",
+      buyerAddress: "",
+      buyerState: "",
+      buyerPincode: "",
       sellerPAN: "",
       sellerGST: "",
       placeOfSupply: "",
       invoiceNo: generateInvoiceNumber(),
       invoiceDetails: "",
-      invoiceDate:displayDate(),
+      invoiceDate: displayDate(),
       reverseCharge: false,
       logo: null,
-      signature:null,
+      signature: null,
       items: [
         {
           description: "",
           unitPrice: 0,
           quantity: 0,
+          discount: 0,
           netAmount: 0,
           taxRate: 18,
           taxAmount: 0,
@@ -117,28 +92,29 @@ const InvoiceForm = () => {
         },
       ],
     },
-    // validationSchema,
-    onSubmit: (values) => {
-      console.log("Form Values on Submit:", values);
-      setShowDownloadButton(true)
+    validationSchema: YupValidation,
+    onSubmit: () => {
+      setShowDownloadButton(true);
     },
   });
 
-  const handleItemChange = (e, index) => {
-    const { name, value } = e.target;
-    const path = name.split("[")[0];
-    const items = [...formik.values.items];
-    items[index][path] = Number(value);
+  const handleItemChange = (index, field, value) => {
+    const updatedItems = formik.values.items.map((item, i) => {
+      if (i === index) {
+        const updatedItem = {
+          ...item,
+          [field]: value,
+        };
+        updatedItem.netAmount = (updatedItem.unitPrice * updatedItem.quantity) - updatedItem.discount;
+        updatedItem.taxAmount = (updatedItem.netAmount * updatedItem.taxRate) / 100;
+        updatedItem.totalAmount = updatedItem.netAmount + updatedItem.taxAmount;
+        return updatedItem;
+      }
+      return item;
+    });
 
-    // Calculate new amounts when relevant fields change
-    if (["unitPrice", "quantity", "discount", "taxRate"].includes(path)) {
-      const calculatedFields = calculateItemFields(items[index]);
-      items[index] = { ...items[index], ...calculatedFields };
-    }
-
-    formik.setFieldValue("items", items);
+    formik.setFieldValue('items', updatedItems);
   };
-
 
   const handleLogoChange = (event) => {
     const file = event.currentTarget.files[0];
@@ -150,22 +126,36 @@ const InvoiceForm = () => {
     reader.readAsDataURL(file);
   };
 
+  const handleSubmit = () => {
+    if (formik.isValid) {
+      // Generate the invoice here
+      setShowDownloadButton(true);
+    } else {
+      // Handle form validation errors
+      alert('Please correct the form errors before generating the invoice.');
+    }
+  };
+
   return (
     <FormikProvider value={formik}>
       <form onSubmit={formik.handleSubmit}>
-      <Grid item xs={12} display={"inline-block"}>
-              <Button variant="contained" component="label">
-                Upload Logo
-                <input type="file" hidden onChange={handleLogoChange} />
-              </Button>
-              {logoPreview && (
-                <div style={{ marginTop: '20px' }}>
-                  <img src={logoPreview} alt="Logo Preview" style={{ maxHeight: '100px', maxWidth: '100px' }} />
-                </div>
-              )}
-            </Grid>
+        <Grid item xs={12} display={"inline-block"}>
+          <Button variant="contained" component="label">
+            Upload Logo
+            <input type="file" hidden onChange={handleLogoChange} />
+          </Button>
+          {logoPreview && (
+            <div style={{ marginTop: "20px" }}>
+              <img
+                src={logoPreview}
+                alt="Logo Preview"
+                style={{ maxHeight: "100px", maxWidth: "100px" }}
+              />
+            </div>
+          )}
+        </Grid>
         <Typography variant="h5" sx={{ my: 1 }} align="left">
-        Invoice Details
+          Invoice Details
         </Typography>
         <Paper style={{ padding: "20px", marginBottom: "20px" }}>
           <Grid container spacing={2}>
@@ -193,7 +183,7 @@ const InvoiceForm = () => {
               />
             </Grid>
             <Grid item xs={2}>
-            <TextField
+              <TextField
                 fullWidth
                 id="invoiceDate"
                 name="invoiceDate"
@@ -248,13 +238,12 @@ const InvoiceForm = () => {
           </Grid>
         </Paper>
         <Typography variant="h5" sx={{ my: 1 }} align="left">
-         Seller & Biller Details
+          Seller & Biller Details
         </Typography>
         <Paper style={{ padding: "20px", marginBottom: "20px" }}>
           <Grid container spacing={2}>
             <Grid item xs={6}>
               <TextField
-                colSpan={2}
                 fullWidth
                 sx={{ mt: 1 }}
                 id="sellerName"
@@ -262,8 +251,9 @@ const InvoiceForm = () => {
                 label="Seller Name"
                 value={formik.values.sellerName}
                 onChange={formik.handleChange}
+                error={formik.touched.sellerName && Boolean(formik.errors.sellerName)}
+                helperText={formik.touched.sellerName && formik.errors.sellerName}
               />
-
               <TextField
                 fullWidth
                 sx={{ mt: 1 }}
@@ -273,6 +263,8 @@ const InvoiceForm = () => {
                 label="Address"
                 value={formik.values.sellerAddress}
                 onChange={formik.handleChange}
+                error={formik.touched.sellerAddress && Boolean(formik.errors.sellerAddress)}
+                helperText={formik.touched.sellerAddress && formik.errors.sellerAddress}
               />
               <TextField
                 fullWidth
@@ -282,6 +274,8 @@ const InvoiceForm = () => {
                 label="State"
                 value={formik.values.sellerState}
                 onChange={formik.handleChange}
+                error={formik.touched.sellerState && Boolean(formik.errors.sellerState)}
+                helperText={formik.touched.sellerState && formik.errors.sellerState}
               />
               <TextField
                 fullWidth
@@ -291,6 +285,8 @@ const InvoiceForm = () => {
                 label="Pincode"
                 value={formik.values.sellerPincode}
                 onChange={formik.handleChange}
+                error={formik.touched.sellerPincode && Boolean(formik.errors.sellerPincode)}
+                helperText={formik.touched.sellerPincode && formik.errors.sellerPincode}
               />
             </Grid>
             <Grid item xs={6}>
@@ -302,6 +298,8 @@ const InvoiceForm = () => {
                 label="Buyer Name"
                 value={formik.values.buyerName}
                 onChange={formik.handleChange}
+                error={formik.touched.buyerName && Boolean(formik.errors.buyerName)}
+                helperText={formik.touched.buyerName && formik.errors.buyerName}
               />
               <TextField
                 fullWidth
@@ -312,8 +310,9 @@ const InvoiceForm = () => {
                 label="Address"
                 value={formik.values.buyerAddress}
                 onChange={formik.handleChange}
+                error={formik.touched.buyerAddress && Boolean(formik.errors.buyerAddress)}
+                helperText={formik.touched.buyerAddress && formik.errors.buyerAddress}
               />
-
               <TextField
                 fullWidth
                 sx={{ mt: 1 }}
@@ -322,6 +321,8 @@ const InvoiceForm = () => {
                 label="State"
                 value={formik.values.buyerState}
                 onChange={formik.handleChange}
+                error={formik.touched.buyerState && Boolean(formik.errors.buyerState)}
+                helperText={formik.touched.buyerState && formik.errors.buyerState}
               />
               <TextField
                 fullWidth
@@ -331,13 +332,20 @@ const InvoiceForm = () => {
                 label="Pincode"
                 value={formik.values.buyerPincode}
                 onChange={formik.handleChange}
+                error={formik.touched.buyerPincode && Boolean(formik.errors.buyerPincode)}
+                helperText={formik.touched.buyerPincode && formik.errors.buyerPincode}
               />
             </Grid>
           </Grid>
         </Paper>
-        <Typography variant="h6" gutterBottom>
-          Item Details
+        <Typography variant="h5" sx={{ my: 1 }} align="left">
+          Items
         </Typography>
+        {formik.errors && formik.errors.items && (
+          <div style={{ color: 'red' }}>
+            Please correct the errors in the items.
+          </div>
+        )}
         <FieldArray name="items">
           {({ push, remove }) => (
             <TableContainer component={Paper} style={{ marginBottom: "20px" }}>
@@ -364,87 +372,79 @@ const InvoiceForm = () => {
                           name={`items[${index}].description`}
                           label="Description"
                           value={item.description}
-                          onChange={formik.handleChange}
+                          onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                           variant="soft"
+                          error={formik.touched.items?.[index]?.description && Boolean(formik.errors.items?.[index]?.description)}
+                          helperText={formik.touched.items?.[index]?.description && formik.errors.items?.[index]?.description}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
+                        <TextField
                           fullWidth
                           id={`items[${index}].unitPrice`}
                           name={`items[${index}].unitPrice`}
                           label="Unit Price"
                           type="number"
                           value={item.unitPrice}
-                          onChange={(e) => {
-                            formik.handleChange(e);
-                            const items = [...formik.values.items];
-                            items[index] = calculateItemFields(items[index]);
-                            formik.setFieldValue("items", items);
-                          }}
+                          onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
+                          error={formik.touched.items?.[index]?.unitPrice && Boolean(formik.errors.items?.[index]?.unitPrice)}
+                          helperText={formik.touched.items?.[index]?.unitPrice && formik.errors.items?.[index]?.unitPrice}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
+                        <TextField
                           fullWidth
                           id={`items[${index}].quantity`}
                           name={`items[${index}].quantity`}
                           label="Quantity"
                           type="number"
                           value={item.quantity}
-                          onChange={(e) => {
-                            formik.handleChange(e);
-                            const items = [...formik.values.items];
-                            items[index] = calculateItemFields(items[index]);
-                            formik.setFieldValue("items", items);
-                          }}
+                          onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                          error={formik.touched.items?.[index]?.quantity && Boolean(formik.errors.items?.[index]?.quantity)}
+                          helperText={formik.touched.items?.[index]?.quantity && formik.errors.items?.[index]?.quantity}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
+                        <TextField
                           fullWidth
                           id={`items[${index}].discount`}
                           name={`items[${index}].discount`}
                           label="Discount"
                           type="number"
                           value={item.discount}
-                          onChange={(e) => {
-                            formik.handleChange(e);
-                            const items = [...formik.values.items];
-                            items[index] = calculateItemFields(items[index]);
-                            formik.setFieldValue("items", items);
-                          }}
+                          onChange={(e) => handleItemChange(index, 'discount', e.target.value)}
+                          error={formik.touched.items?.[index]?.discount && Boolean(formik.errors.items?.[index]?.discount)}
+                          helperText={formik.touched.items?.[index]?.discount && formik.errors.items?.[index]?.discount}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
+                        <TextField
                           fullWidth
                           id={`items[${index}].netAmount`}
                           name={`items[${index}].netAmount`}
                           label="Net Amount"
                           type="number"
                           value={item.netAmount.toFixed(2)}
-                          
+                          error={formik.touched.items?.[index]?.netAmount && Boolean(formik.errors.items?.[index]?.netAmount)}
+                          helperText={formik.touched.items?.[index]?.netAmount && formik.errors.items?.[index]?.netAmount}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
+                        <TextField
                           fullWidth
                           id={`items[${index}].taxRate`}
                           name={`items[${index}].taxRate`}
                           label="Tax Rate"
                           type="number"
                           value={item.taxRate}
-                          onChange={(e) => {
-                            formik.handleChange(e);
-                            const items = [...formik.values.items];
-                            items[index] = calculateItemFields(items[index]);
-                            formik.setFieldValue("items", items);
-                          }}
+                          onChange={(e) => handleItemChange(index, 'taxRate', e.target.value)}
+                          error={formik.touched.items?.[index]?.taxRate && Boolean(formik.errors.items?.[index]?.taxRate)}
+                          helperText={formik.touched.items?.[index]?.taxRate && formik.errors.items?.[index]?.taxRate}
+                         
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
+                        <TextField
                           fullWidth
                           id={`items[${index}].taxAmount`}
                           name={`items[${index}].taxAmount`}
@@ -452,10 +452,18 @@ const InvoiceForm = () => {
                           type="number"
                           value={item.taxAmount.toFixed(2)}
                           disabled
+                          error={
+                            formik.touched.items?.[index]?.taxAmount &&
+                            Boolean(formik.errors.items?.[index]?.taxAmount)
+                          }
+                          helperText={
+                            formik.touched.items?.[index]?.taxAmount &&
+                            formik.errors.items?.[index]?.taxAmount
+                          }
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
+                        <TextField
                           fullWidth
                           id={`items[${index}].totalAmount`}
                           name={`items[${index}].totalAmount`}
@@ -463,6 +471,10 @@ const InvoiceForm = () => {
                           type="number"
                           value={item.totalAmount.toFixed(2)}
                           disabled
+                          helperText={
+                            formik.touched.items?.[index]?.description &&
+                            formik.errors.items?.[index]?.description
+                          }
                         />
                       </TableCell>
                       <TableCell>
@@ -503,49 +515,53 @@ const InvoiceForm = () => {
             </TableContainer>
           )}
         </FieldArray>
-        <Typography variant="h6" gutterBottom>
+        <Typography variant="h5" sx={{ my: 1 }} align="left">
           Seller Signature
         </Typography>
         <Paper style={{ padding: "20px", marginBottom: "20px" }}>
-        <TextField
-        fullWidth
-        id="sellerName"
-        name="sellerName"
-        label="Seller Name"
-        value={formik.values.sellerName}
-        onChange={formik.handleChange}
-      />
-     <Button variant="contained" component="label">
-    Upload Signature
-    <input type="file" hidden accept="image/*" onChange={handleSignatureChange} />
-  </Button>
-  {signature && (
-    <img src={signature} alt="Signature Preview" style={{ maxHeight: '100px' }} />
-  )}
-
+          <Button variant="contained" component="label">
+            Upload Signature
+            <input
+              type="file"
+              hidden
+              accept="image/*"
+              onChange={handleSignatureChange}
+            />
+          </Button>
+          {signature && (
+            <img
+              src={signature}
+              alt="Signature Preview"
+              style={{ maxHeight: "100px" }}
+            />
+          )}
         </Paper>
-       
-
-        <Button
-          color="primary"
-          variant="contained"
-          type="submit"
-          style={{ marginTop: "20px" }}
-        >
+        <Button color="primary" variant="contained" type="submit">
           Generate Invoice
         </Button>
-        {
-          showDownloadButton &&
-          (<PDFDownloadLink
-          document={<InvoicePDF values={formik.values} logo={formik.values.logo} signature={formik.values.signature}/>}
-          fileName="invoice.pdf"
+        {showDownloadButton && (
+          <PDFDownloadLink
+            document={<InvoicePDF formValues={formik.values} logo={formik.values} />}
+            fileName={`Invoice_.pdf`}
+            style={{ textDecoration: "none" }}
           >
-          {({ loading }) => (loading ? "Loading document..." : "Download now")}
-        </PDFDownloadLink>)
-        }
+            {({ loading }) =>
+              loading ? (
+                <Button variant="contained" color="primary" disabled>
+                  Loading Document...
+                </Button>
+              ) : (
+                <Button variant="contained" color="primary">
+                  Download Invoice
+                </Button>
+              )
+            }
+          </PDFDownloadLink>
+        )}
       </form>
     </FormikProvider>
   );
 };
 
 export default InvoiceForm;
+
